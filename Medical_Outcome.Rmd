@@ -4,24 +4,21 @@ author: "Michael J Kesling, Ph.D."
 output: rmarkdown::github_document
 ---
 # Overview
-This project aims to determine whether a particular medical regimen improves health, as measured by weight loss and self-reported health (SRH).  All starting data were already anonymized.  
+This project aims to determine whether a particular medical treatment improves health, as measured by (1) weight loss, and (2) self-reported health (SRH) improvement.  All starting data have already been anonymized.  
 
 This webpage omits a few lines of code in order to reduce error messages, etc.  The full R Markdown file can be seen [here].
 
-```{r setup, include=FALSE, dpi=300}
+```{r setup, include=FALSE, fig.height=8, fig.width=8, dpi=300}
 knitr::opts_chunk$set(echo = TRUE)
+require(dplyr)
+require(magrittr)
+require(ggplot2)
 ```
 
 ## Part 1: Creating an Analytical Dataset
 The given data reside in 4 separate files.  To analyze the data, I'll create a single dataframe with one subject per line and one column per measurement.  
 
 I start by reading in each file separately as a dataframe, cleaning it up, and then merging the 4 dataframes into a single one.  
-```{r, include=FALSE}
-require(dplyr)
-require(magrittr)
-require(caTools)
-require(ggplot2)
-```
 ```{r}
 palette <- c("#000000", "#56B4E9")
 
@@ -163,12 +160,13 @@ DF$postSRH <- as.numeric(DF$postSRH %>% {gsub("Excellent", 5, .)} %>%
 DF <- DF %>% mutate(weightGain=POST_WEIGHT - PRE_WEIGHT)
 DF <- DF %>% mutate(SRHimprove=postSRH - preSRH)
 ```
+## Part 2: Analyzing Study from Weight Loss Vantage Point
+
 ### Plot of Weight Loss by Treatment
 We start off by simply plotting *weightGain* vs *treatment*  
-
-```{r}
+```{r, dpi=300}
 ggplot(DF, aes(x=trt, y=weightGain)) +
-  geom_jitter(size=0.5) + xlab("Treatment") + ylab("Weight Gain")
+  geom_jitter(size=0.5) + xlab("Treatment") + ylab("Weight Change")
 ```
 We see 2 trends immediately.  The control subjects had remarkably little change in their weights, but the treated subjects had (1) much greater variance in their weight change, and (2) a net loss in weight.  It's also clear that in some cases, the treatment caused weight gain.
 
@@ -196,10 +194,11 @@ Neither *age* (not shown) nor *race* have a statistically significant coefficien
 
 ### Analyzing Weight Loss in Men and Women Separately
 I'm going to follow this up with a plot, separating out men and women.  
-```{r}
+```{r, dpi=300}
 ggplot(DF, aes(x=sex, y=weightGain), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.5) + 
   ggtitle("Weight Change for Treated and Control Women and Men") +
+  ylab("Weight Gain") +
   scale_color_manual(name="Treatment",
                       breaks = c("0","1"),
                       values = palette,
@@ -209,7 +208,7 @@ This plot is actually quite remarkable, as it shows that virtually all weight ga
 
 ### Distribution of Weight Change by Sex and Treatment
 I'm going to plot the densities of the weight change broken down by sex and treatment, which is simply another representation of what the previous figure showed.  
-```{r}
+```{r, dpi=300}
 labels <-c("0"="Control Subjects", "1"="Treated Subjects")
 ggplot(DF, aes(x=weightGain)) + 
    geom_line(aes(colour=sex), stat="density") +
@@ -217,19 +216,10 @@ ggplot(DF, aes(x=weightGain)) +
    ggtitle("Weight Gain Density by Sex and Treatment")
 
 ```
-The *weightGain* variable gives normal distributions when only control subjects are considered and when only treated subjects are considered.  So we can use the *weightGain* variable as-is.  
-####
-The motivation is that I'd like to see if I can sub-divide the women in some way as to see if those who gain weight have some predictive pattern.  
-####
-### Analyzing Relationships in Data
-
-```{r}
-DF_ctrl <- DF %>% filter(trt == 0)
-DF_trmt <- DF %>% filter(trt == 1)
-```
+The *weightGain* variable gives normal distributions when only control subjects are considered and when only treated subjects are considered.  So we can use the *weightGain* variable as-is.  We can also see clearly that the variance for both sexes is small and essentially equal for the control subjects and is large and essentially equal for treatment subjects.  The mean for men in both groups is lower than for women.  
 
 
-### Separately Modeling Men and Women
+### Modeling Men 
 If we take sex as a known and build separate models for women and for men, I suspect that the simple linear regression model for men will be extremely predictive.
 
 ```{r}
@@ -257,7 +247,7 @@ Neither *age* nor *race*, with or without *treatment* has any predictive power, 
 
 It should be noted that each coefficient represents how much the weightGain variable changes per single unit change in the predictor, while holding all other predictors constant.  However, the predictors can be correlated with one another, and it may not be possible to only change the predictor in question while not changing any other predictors.  
 Next, I'd like to plot out the women by race for a visual effect of what we just saw in the MVR model:  
-```{R}
+```{R, dpi=300}
 ggplot(DF_women, aes(x=race, y=weightGain), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.5) +
   ggtitle("Weight Gain for Women by Race") +
@@ -268,7 +258,7 @@ ggplot(DF_women, aes(x=race, y=weightGain), colour=trt) +
 ```
 
 Plotting women's age:
-```{r}
+```{r, dpi=300}
 ggplot(DF_women, aes(x=age, y=weightGain), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.5) +
   ggtitle("Weight Gain of Women Plotted vs. Age") +
@@ -278,11 +268,12 @@ ggplot(DF_women, aes(x=age, y=weightGain), colour=trt) +
                       labels = c("No", "Yes"))
   
 ```
-Again, consistent with the *modelWomenMVR* above, age is not an explanatory variable, with the possible exception of women under 25 and women over 55, had we broken *age* into 3 distinct ranges.  
+Again, consistent with the *modelWomenMVR* above, age is not an explanatory variable, with the possible exception of women under 25 and women over 55, had we broken *age* into 3 distinct ranges.  Overall, race and age have little effect on weight loss or gain for women.  
 
+
+## Part 3: Analyzing Study from SRH Improvement Vantage Point
 
 ### SRH Simple Linear Regression
-
 In terms of SRH, there does seem to be more density in the positive direction and less density in the negative direction for treated subjects compared to control subjects.
 
 ```{r}
@@ -294,15 +285,16 @@ We see that the treatment variable explains only about 4.5% of the total SRH imp
 SRH_MVR <- lm(SRHimprove ~ trt * sex, data=DF)
 summary(SRH_MVR)
 ```
-Here, we're seeing that the treatment improves SRH overall, and there's an additional effect for treated men.  
+Here, we're seeing that the treatment improves SRH overall, and there's an additional effect for treated men.  Each coefficient represents about a 0.3 category change (e.g. 30% the size from Satisfactory to Good).
 
-```{r}
+```{r, dpi=300}
 ggplot(DF, aes(x=trt, y=SRHimprove), colour=sex) + 
   geom_jitter(aes(colour=sex), size=0.5) +
   theme_bw() + ggtitle("Self Reported Health Improvement") +
-  scale_color_manual(name="Category",
+  ylab("SRH improvement") + xlab("Treatment") +
+  scale_color_manual(name="Sex",
                       breaks = c("MALE", "FEMALE"),
-                      values = c("orange", "blue"),
+                      values = c("green", "blue"),
                       labels = c("Male", "Female"))
 ```
 Once can clearly see the higher density of treated men compared to treated women with a positive SRH.  This is particularly apparent when the SRH improvement is 3 categories or greater.  
@@ -312,11 +304,11 @@ srhSex <- lm(SRHimprove ~ trt * age, data=DF)
 summary(srhSex)
 ```
 We see that there's a significant age:treatment interaction term.
-```{r}
+```{r, dpi=300}
 ggplot(DF, aes(x=age, y=SRHimprove), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.3) +
   ggtitle("SRH Improvement of Subjects vs. Age") +
-  theme_bw() +
+  theme_bw() + ylab("SRH Improvement") +
   scale_color_manual(name="Treatment",
                       breaks = c("0","1"),
                       values = palette,
@@ -325,7 +317,10 @@ ggplot(DF, aes(x=age, y=SRHimprove), colour=trt) +
 ```
 Amongst the people whose SRH changes during the study,  
 1. No one is under the age of 32
-2. 
+2. There is an enrichment of untreated people who get worse between ages 32-39.
+3. There is an enrichment of treated people who get better between 45-50.
+4. There is an enrichment of untreated people who get a little better between 50-55.
+5. Overall, increasing age predicts SRH improvement for treated subjects.
 
 
 Increasing age improves SRH improvement, but with a small magnitude.
@@ -341,8 +336,10 @@ summary(SRHwomen)
 ```
 
 
-# Conclusions:
-1. The treatment is very effective for weight loss in men, with an average loss of over 13 pounds.  The result is statistically signficant.  
-2. The treatment gives rise to an average weight loss of 3 pounds for women.  The result is statistically significant.  The treatment sometimes gives rise to weight gain of about XXX percent of women.
+### Conclusions (all statistically significant):
+1. The treatment is very effective for weight loss in men, with an average loss of over 13 pounds.  
+2. The treatment gives rise to an average weight loss of 3 pounds for women.  The treatment sometimes gives rise to weight gain for some women.  
 3. Neither race nor age is a significant predictor for weight loss.
-4. The treatment gave rise to a half-unit improvement in self-reported health index in both men and women, but the effect improvement in men was almost twice as large as for women.
+4. The treatment gave rise to a 1/3-unit improvement in self-reported health index in women and 2/3-unit improvement in men.  
+5. Those below age 32 did not undergo any SRH changes--either positive or negative.
+6. Increasing Age had a positive effect on SRH improvement for treated individuals.
