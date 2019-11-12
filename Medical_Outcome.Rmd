@@ -4,9 +4,11 @@ author: "Michael J Kesling, Ph.D."
 output: rmarkdown::github_document
 ---
 # Overview
-This project aims to determine whether a particular medical regimen improves health, as measured by weight loss and self-reported health (SRH).  All data have been anonymized.  
+This project aims to determine whether a particular medical regimen improves health, as measured by weight loss and self-reported health (SRH).  All starting data were already anonymized.  
 
-```{r setup, include=FALSE}
+This webpage omits a few lines of code in order to reduce error messages, etc.  The full R Markdown file can be seen [here].
+
+```{r setup, include=FALSE, dpi=300}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -14,11 +16,13 @@ knitr::opts_chunk$set(echo = TRUE)
 The given data reside in 4 separate files.  To analyze the data, I'll create a single dataframe with one subject per line and one column per measurement.  
 
 I start by reading in each file separately as a dataframe, cleaning it up, and then merging the 4 dataframes into a single one.  
-```{r}
+```{r, include=FALSE}
 require(dplyr)
 require(magrittr)
 require(caTools)
 require(ggplot2)
+```
+```{r}
 palette <- c("#000000", "#56B4E9")
 
 # read in first file:
@@ -29,10 +33,10 @@ sex <- gsub("([A-Z]+)[0-9]+.*","\\1",one$SexAge_Race)
 age <- gsub("[A-Z]+([0-9.]+).*","\\1",one$SexAge_Race)
 race <- gsub("[A-Z]+[0-9.]+_(.*)","\\1",one$SexAge_Race)
 
-# create main dataframe:                 # MATRIX RIGHT NOW
+# create main dataframe:
 DF <- data.frame(cbind(subjID=one$subject_ID, sex, age, race))
 ```
-Next, I process the second file:
+Next, I process the second file.  *SRH* means Self-Reported Health.
 ```{r}
 # read in second file
 two <- read.csv("data2_SRH.csv")
@@ -121,7 +125,7 @@ postWeight_cleaned <- postWeight_cleaned %>% select(POST_WEIGHT)
 # finish merging the rest of the data into DF
 DF <- cbind(DF, preWeight_cleaned, postWeight_cleaned)
 ```
-Lastly, age and subject are not stored as numeric
+Lastly, we convert *age* and *subject* to numeric variables  
 ```{r}
 DF$age <- as.numeric(as.character(DF$age))
 DF$subjID <- as.numeric(as.character(DF$subjID))
@@ -134,7 +138,7 @@ This study aims to see if the treatment has an effect on either altering the pat
 3. Satisfactory  
 4. Good  
 5. Excellent  
-and perform a post minus pre subtraction as well.  It should be noted that the "Excellent" and "Very Poor" levels appear more than once due to space characters.  These will be cleaned up as well.
+and perform a post-SRH minus pre-SRH subtraction as well.  It should be noted that the "Excellent" and "Very Poor" levels appear more than once due to space characters.  These will be cleaned up as well.
 ```{r}
 # clean up typographical errors
 DF$preSRH <- gsub("Excellent ", "Excellent", DF$preSRH)
@@ -144,10 +148,8 @@ DF$postSRH <- gsub("Very  Poor", "Very Poor", DF$postSRH)
 unique(DF$preSRH)
 unique(DF$postSRH)
 
-# barplot(prop.table(table(DF$preSRH)))
-# barplot(prop.table(table(DF$postSRH)))
 
-# I am going to assume, for the moment, that these 5 categories are equally spaced.
+# Subtract pre- from post-SRH
 DF$preSRH <- as.numeric(DF$preSRH %>% {gsub("Excellent", 5, .)} %>% 
   {gsub("Good", 4, .)} %>% {gsub("Satisfactory", 3, .)} %>% 
   {gsub("Very Poor", 1, .)} %>% {gsub("Poor", 2, .)})
@@ -157,41 +159,43 @@ DF$postSRH <- as.numeric(DF$postSRH %>% {gsub("Excellent", 5, .)} %>%
   {gsub("Very Poor", 1, .)} %>% {gsub("Poor", 2, .)})
 
 
-# now create new DF with 
+# add new columns to the dataframe DF
 DF <- DF %>% mutate(weightGain=POST_WEIGHT - PRE_WEIGHT)
 DF <- DF %>% mutate(SRHimprove=postSRH - preSRH)
 ```
 ### Plot of Weight Loss by Treatment
-The simplest way to consider the effect of the treatment is to ignore *sex* and *race* and simply see what the 2-tailed 95% confidence intervals look like for *weightGain* vs treatment and *SRHimprove* vs treatment.
+We start off by simply plotting *weightGain* vs *treatment*  
 
-I'd like to start with 2 plots:
 ```{r}
 ggplot(DF, aes(x=trt, y=weightGain)) +
-  geom_jitter(size=0.5)
+  geom_jitter(size=0.5) + xlab("Treatment") + ylab("Weight Gain")
 ```
-We see 2 trends immediately.  The control subjects had remarkably little change in their weights, but the treated sample had much greater variance in their weight change, with the average being a weight loss.  It's also clear that in some cases, the treatment caused weight gain.
+We see 2 trends immediately.  The control subjects had remarkably little change in their weights, but the treated subjects had (1) much greater variance in their weight change, and (2) a net loss in weight.  It's also clear that in some cases, the treatment caused weight gain.
 
 ### Simple Linear Regression of Weight Change
+We perform a simple linear regression on treatment on weight gain to observe the magnitude and statistical significance of the treatment.  
 ```{R}
 weightModel <- lm(weightGain ~ trt, data=DF)
 summary(weightModel)
 ```
-We see that, on average, there's an 8.2 weight loss amongst the treated subjects compared to the control subjects, with a small standard error (0.21).  The t-statisic shows that we're about 40 standard errors away from the null model of no change, and the p-value is < 2e-16.
+We see that, on average, there's an 8.2 pound weight loss amongst the treated subjects compared to the control subjects, with a small standard error (0.21).  The t-statisic shows that we're over 45 standard errors away from the null model of no change, and the p-value is well under 2e-16.  
 
 The adjusted R-squared value says that the treatment variable only explains 29% of the variance.  Nevertheless, we have plenty of statistical power supporting the treatment variable acting as a predictor for *weightGain* in this simple linear regression.
 
-### Multivariate Modeling of Weight Loss
-We'll now build multivariate models using *sex*, *race*, and *treatment* to see how much better our model can be.  We'd also like to see if we can understand anything about those who are actually gaining weight as the result of the treatment.
+### Multivariate Modeling of Weight Loss  
+We'll now build multivariate models using *sex*, *race*, and *treatment* to see how these variables affect weight loss.  We'd also like to see if we can understand anything about those who are actually gaining weight as the result of the treatment.  
 ```{r}
-weightMVR <- lm(weightGain ~ sex * race * trt,data=DF)
+weightMVR <- lm(weightGain ~ sex * race * trt, data=DF)
 summary(weightMVR)
 ```
-We see that overall men lose about 2 pounds more than women, when their treatment/control status is not included.  We see that those in the treatment group lose 3 pounds compared to the control group, when no other attributes are included.  
+We see that *overall* men lose about 2 pounds more than women, when their treatment/control status is not included.  We see that those in the treatment group lose almost 3 pounds compared to the control group, when no other attributes are included.  
 We also see a specific Male:Treatment interaction term that is quite large.  Men who are treated lose an additional 10 pounds above and beyond the 2 pound loss of being men and the 3 pound loss of being treated.  
 All 3 of these coefficients are statistically significant.  
 The variables and all the interaction terms now explain about 65% of the weightGain variance.  
-I'm going to follow this up with a plot, separating out men and women.  
+Neither *age* (not shown) nor *race* have a statistically significant coefficient.  The age-sexMALE interaction term has a p-value of about 0.06, but the magnitude is only -0.06 pounds.  
 
+### Analyzing Weight Loss in Men and Women Separately
+I'm going to follow this up with a plot, separating out men and women.  
 ```{r}
 ggplot(DF, aes(x=sex, y=weightGain), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.5) + 
@@ -206,17 +210,17 @@ This plot is actually quite remarkable, as it shows that virtually all weight ga
 ### Distribution of Weight Change by Sex and Treatment
 I'm going to plot the densities of the weight change broken down by sex and treatment, which is simply another representation of what the previous figure showed.  
 ```{r}
+labels <-c("0"="Control Subjects", "1"="Treated Subjects")
 ggplot(DF, aes(x=weightGain)) + 
    geom_line(aes(colour=sex), stat="density") +
-   geom_line(stat = "density") +
-   facet_wrap(~ trt, ncol=2) +
+   facet_wrap(~ trt, ncol=2, labeller = labeller(trt=labels)) +
    ggtitle("Weight Gain Density by Sex and Treatment")
 
-# ADD CURVE THAT IS CUMULATIVE
 ```
 The *weightGain* variable gives normal distributions when only control subjects are considered and when only treated subjects are considered.  So we can use the *weightGain* variable as-is.  
-
-
+####
+The motivation is that I'd like to see if I can sub-divide the women in some way as to see if those who gain weight have some predictive pattern.  
+####
 ### Analyzing Relationships in Data
 
 ```{r}
@@ -225,32 +229,15 @@ DF_trmt <- DF %>% filter(trt == 1)
 ```
 
 
-```{r}
-ggplot(DF, aes(x=trt, y=SRHimprove), colour=sex) +
-  geom_jitter(aes(colour=sex), size=0.5)
-```
-In terms of SRH, there does seem to be more density in the positive direction and less density in the negative direction for treated subjects compared to control subjects.
-
-
-
-```{r}
-SRHmodel <- lm(DF$SRHimprove ~ DF$trt)
-summary(SRHmodel)
-```
-We see that the treatment variable explains about 4.5% of the total SRH improvement variance.  The average SRH improvement is 1/2 of a category.  We also have very strong statistical support.
-
-
-    
-
-### Refining Model
+### Separately Modeling Men and Women
 If we take sex as a known and build separate models for women and for men, I suspect that the simple linear regression model for men will be extremely predictive.
 
 ```{r}
 DF_men <- DF %>% filter(sex == "MALE")
-modelMen <- lm(weightGain ~ trt,data=DF_men)
+modelMen <- lm(weightGain ~ trt, data=DF_men)
 summary(modelMen)
 ```
-The treatment is associated with a 13.6 pound weight loss in men.
+The treatment is associated with a 13.6 pound weight loss in men, and it's over 70 standard errors from a weight loss of zero.  *treatment* also explains nearly 70% of the variance for men.  
 
 ### Modeling Women
 ```{r}
@@ -258,18 +245,18 @@ DF_women <- DF %>% filter(sex == "FEMALE")
 modelWomen <- lm(weightGain ~ trt, data=DF_women)
 summary(modelWomen)
 ```
-When the model looks only at women, there is an average weight loss of about 3 pounds, and it's quite statistically significant.  
+When the model looks only at women, there is an average weight loss of about 3 pounds, and it's quite statistically significant.  However, *treatment* only explains about 9% of the variance for women.
 
+### Looking at Predictors More Carefully for Women
 I'm going to further tease apart the Women dataset to see if I can isolate those who are gaining weight.  
 ```{r}
-modelWomenMVR <- lm(weightGain ~ trt * race * age, data=DF_women)
+modelWomenMVR <- lm(weightGain ~ trt * age * race, data=DF_women)
 summary(modelWomenMVR)
 ```
-We see that the coefficient for treated women who are black is +3.6 pounds, but it's not statistically significant.  Age seems to have virtually no impact.
+Neither *age* nor *race*, with or without *treatment* has any predictive power, and does not help separate women who gain weight from women who lose weight.  Creating smaller models with less predictors did not shed more light on this issue (not shown).  
 
-It should be noted that each coefficient represents how much the weightGain variable changes per single unit change in the predictor, while holding all other predictors constant.  However, the predictors can be correlated with one another, and it may not be possible to only change the predictor in question while not changing any other predictors.
-
-Next, I'd like to plot out the women by race
+It should be noted that each coefficient represents how much the weightGain variable changes per single unit change in the predictor, while holding all other predictors constant.  However, the predictors can be correlated with one another, and it may not be possible to only change the predictor in question while not changing any other predictors.  
+Next, I'd like to plot out the women by race for a visual effect of what we just saw in the MVR model:  
 ```{R}
 ggplot(DF_women, aes(x=race, y=weightGain), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.5) +
@@ -279,7 +266,6 @@ ggplot(DF_women, aes(x=race, y=weightGain), colour=trt) +
                       values = palette,
                       labels = c("No", "Yes"))
 ```
-Based on the plot, I believe that the magnitude of the treatment:Black-women coefficient may be due to a single outlier. (It wasn't statistically significant anyway.)  Overall, race doesn't help sub-divide the group of women who gain weight.
 
 Plotting women's age:
 ```{r}
@@ -292,18 +278,23 @@ ggplot(DF_women, aes(x=age, y=weightGain), colour=trt) +
                       labels = c("No", "Yes"))
   
 ```
-Again, consistent with the *modelWomenMVR* above, age is not an explanatory variable, with the possible exception of women under 25 and women over 55.
+Again, consistent with the *modelWomenMVR* above, age is not an explanatory variable, with the possible exception of women under 25 and women over 55, had we broken *age* into 3 distinct ranges.  
 
 
-### SRH Multi-Variate Regression
+### SRH Simple Linear Regression
+
+In terms of SRH, there does seem to be more density in the positive direction and less density in the negative direction for treated subjects compared to control subjects.
+
 ```{r}
-SRH_MVR <- lm(SRHimprove ~ trt * age, data=DF)
+SRHmodel <- lm(SRHimprove ~ trt, data=DF)
+summary(SRHmodel)
+```
+We see that the treatment variable explains only about 4.5% of the total SRH improvement variance.  The average SRH improvement is 1/2 of a category.  We also have very strong statistical support.
+```{r}
+SRH_MVR <- lm(SRHimprove ~ trt * sex, data=DF)
 summary(SRH_MVR)
 ```
 Here, we're seeing that the treatment improves SRH overall, and there's an additional effect for treated men.  
-
-Increasing age improves SRH improvement, but with a small magnitude.
-Being hispanic or white also explains part of the improvement with larger magnitude but less statistical significance.
 
 ```{r}
 ggplot(DF, aes(x=trt, y=SRHimprove), colour=sex) + 
@@ -316,6 +307,29 @@ ggplot(DF, aes(x=trt, y=SRHimprove), colour=sex) +
 ```
 Once can clearly see the higher density of treated men compared to treated women with a positive SRH.  This is particularly apparent when the SRH improvement is 3 categories or greater.  
 
+```{r}
+srhSex <- lm(SRHimprove ~ trt * age, data=DF)
+summary(srhSex)
+```
+We see that there's a significant age:treatment interaction term.
+```{r}
+ggplot(DF, aes(x=age, y=SRHimprove), colour=trt) +
+  geom_jitter(aes(colour=as.factor(trt)), size=0.3) +
+  ggtitle("SRH Improvement of Subjects vs. Age") +
+  theme_bw() +
+  scale_color_manual(name="Treatment",
+                      breaks = c("0","1"),
+                      values = palette,
+                      labels = c("no", "yes"))
+  
+```
+Amongst the people whose SRH changes during the study,  
+1. No one is under the age of 32
+2. 
+
+
+Increasing age improves SRH improvement, but with a small magnitude.
+Being hispanic or white also explains part of the improvement with larger magnitude but less statistical significance.
 I'm going to now build separate SRH models for men and women.
 ```{r}
 SRHmen <- lm(SRHimprove ~ trt, data=DF_men)
