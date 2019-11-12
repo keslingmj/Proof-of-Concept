@@ -362,7 +362,8 @@ We start off by simply plotting *weightGain* vs *treatment*
 
 ``` r
 ggplot(DF, aes(x=trt, y=weightGain)) +
-  geom_jitter(size=0.5) + xlab("Treatment") + ylab("Weight Change")
+  geom_jitter(size=0.5) + xlab("Treatment") + ylab("Weight Change") +
+  ggtitle("Effect of Treatment on Weight Change")
 ```
 
 ![](Medical_Outcome_files/figure-markdown_github/unnamed-chunk-13-1.png) We see 2 trends immediately. The control subjects had remarkably little change in their weights, but the treated subjects had (1) much greater variance in their weight change, and (2) a net loss in weight. It's also clear that in some cases, the treatment caused weight gain.
@@ -681,7 +682,7 @@ Here, we're seeing that the treatment improves SRH overall, and there's an addit
 ``` r
 ggplot(DF, aes(x=trt, y=SRHimprove), colour=sex) + 
   geom_jitter(aes(colour=sex), size=0.5) +
-  theme_bw() + ggtitle("Self Reported Health Improvement") +
+  theme_bw() + ggtitle("Self Reported Health Improvement vs Treatment and Sex") +
   ylab("SRH improvement") + xlab("Treatment") +
   scale_color_manual(name="Sex",
                       breaks = c("MALE", "FEMALE"),
@@ -722,7 +723,7 @@ We see that there's a significant age:treatment interaction term.
 ``` r
 ggplot(DF, aes(x=age, y=SRHimprove), colour=trt) +
   geom_jitter(aes(colour=as.factor(trt)), size=0.3) +
-  ggtitle("SRH Improvement of Subjects vs. Age") +
+  ggtitle("SRH Improvement of Subjects vs. Age and Treatment") +
   theme_bw() + ylab("SRH Improvement") +
   scale_color_manual(name="Treatment",
                       breaks = c("0","1"),
@@ -731,7 +732,11 @@ ggplot(DF, aes(x=age, y=SRHimprove), colour=trt) +
 ```
 
 ![](Medical_Outcome_files/figure-markdown_github/unnamed-chunk-27-1.png) Amongst the people whose SRH changes during the study,
-1. No one is under the age of 32 2. There is an enrichment of untreated people who get worse between ages 32-39. 3. There is an enrichment of treated people who get better between 45-50. 4. There is an enrichment of untreated people who get a little better between 50-55. 5. Overall, increasing age predicts SRH improvement for treated subjects.
+1. No one is under the age of 32.
+2. There is an enrichment of untreated people who get worse between ages 32-39.
+3. There is an enrichment of treated people who get better between 45-50.
+4. There is an enrichment of untreated people who get a little better between 50-55.
+5. Overall, increasing age predicts SRH improvement for treated subjects.
 
 Increasing age improves SRH improvement, but with a small magnitude. Being hispanic or white also explains part of the improvement with larger magnitude but less statistical significance. I'm going to now build separate SRH models for men and women.
 
