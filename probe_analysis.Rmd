@@ -1,0 +1,336 @@
+---
+title: "Ethnicity-Specific Breakpoints Technical Evaluation"
+author: "Michael Kesling"
+date: "10/9/2019"
+output: rmarkdown::github_document 
+---
+To run this R Markdown Document, it's best to execute it in RStudio.  It requires that the "cnsl_data.csv" file be located in the same directory as this script.  It also requires that the *tidyr*, *ggplot2*, *reshape* , *gridExtra* and *dplyr* CRAN packages be installed.
+
+If you are having trouble with running it, I have attached the HTML file as well. 
+
+The code for several of the plots is included here.  The code for figure 3 is not included, as it had to be run from a .R file, and not from an .Rmd file.  Likewise, I did not have the time to clean it up.  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyr)
+require(ggplot2)
+require(dplyr)
+require(reshape2)
+require(gridExtra)
+```
+
+## Breakpoints inherited in various ethnic lines
+
+We have 10k individuals measured at 50 positions across the CNSL gene and 50 positions outside of the CNSL gene.  
+
+I'm going to start off by reading in the file.
+
+### Reading in file and saving data as a dataframe
+
+```{r}
+df <- read.csv("cnsl_data.csv", header=TRUE)
+X <- df[,3:dim(df)[2]]    # the data without ethnicity 
+rownames(X) <- df[,1]     # setting rownames to be person-index
+```
+
+## Normalizing relative to the probe median  
+
+```{r}
+scaleDataMedian <- function(DM, ROW=FALSE){
+   rowcol <- ifelse(ROW==TRUE, 1, 2)
+   rowcolInv <- ifelse(rowcol==1, 2, 1)
+   medn <- apply(DM, rowcol, median)
+   DM <- t(apply(DM, rowcolInv, function(x){x /medn}))
+   return(DM)
+}
+
+
+tbl0 <- data.frame(x= 0:99, y=t(X[1,]))         # person number 0
+
+ggplot(tbl0) +
+   geom_point(aes(x=x, y=X0)) +
+   ggtitle("Unnormalized Probe Signals For a Single Person") +
+   ylim(c(0,1500)) +
+   xlab("Probe Number: 0-49 are CNSL, 50-99 are non-CNSL") +
+   ylab("Unnormalized Probe Signals")  
+```
+  
+This shows how variable the signal is probe-to-probe and the need to do a normalization across all measurements for each probe.
+
+### Normalizing each probe separately by diving each probe measurement by the probe mean
+```{r}
+df_median <- scaleDataMedian(df[3:dim(df)[2]], ROW=FALSE)
+rownames(df_median) <- df$X
+tbl <- data.frame(t(rbind(x= 0:99, y=df_median[1,])))   # person0
+ggplot(tbl) +
+   geom_point(aes(x=x, y=y)) +
+   ggtitle("Probe values For a Single Person After Probe-Median Normalization") +
+   ylim(c(0, 1)) +
+   xlab("Probe Number: 0-49 are CNSL, 50-99 are non-CNSL") +
+   ylab("Normalized Probe Signals")
+
+```
+
+### Starting the Analysis  
+```{r}
+# go back to df, as I'll be analyzing each ethnicity separately
+# from there, I'll create 3 dataframes: one for each ethnicity
+
+# break dataset into 3 dataframes--one for each ethnicity
+dfA <- df %>% filter(ethnicity=="A")
+dfB <- df %>% filter(ethnicity=="B")
+dfC <- df %>% filter(ethnicity=="C")
+
+# captures patient numbers as row numbers
+rownames(dfA) <- dfA$X
+rownames(dfB) <- dfB$X
+rownames(dfC) <- dfC$X
+
+# remove non-numeric columns
+dfA <- dfA[,3:dim(dfA)[2]]
+dfB <- dfB[,3:dim(dfB)[2]]
+dfC <- dfC[,3:dim(dfC)[2]]
+
+# as each probe's signal may be quite different than the signal of adjacent probes,
+# it's essential that a normalization be done for each probe.
+# From each value I am subtracting off the probe's median and then dividing that
+# difference by the median again.
+dfA_median <- scaleDataMedian(dfA, ROW=FALSE)
+dfB_median <- scaleDataMedian(dfB, ROW=FALSE)
+dfC_median <- scaleDataMedian(dfC, ROW=FALSE)
+
+# we plot each the individuals within the same ethnicity to look for overall
+# patterns
+dfA_melt <- reshape2::melt(dfA_median)
+dfB_melt <- reshape2::melt(dfB_median)
+dfC_melt <- reshape2::melt(dfC_median)
+
+lenA=dim(dfA_median)[1]
+lenB=dim(dfB_median)[1]
+lenC=dim(dfC_median)[1]
+
+dfA_melt$Var1 <- rep(0:99, each=lenA)
+dfB_melt$Var1 <- rep(0:99, each=lenB)
+dfC_melt$Var1 <- rep(0:99, each=lenC)
+
+ggplot(dfA_melt, aes(Var1, value)) +
+   geom_point(size=0.5) +
+   ylim(0,3) +
+   ggtitle("Normalized Expression of Probe Vals Across All Ethnicity A Persons") +
+   xlab("Probe Number: 0-49 are CNSL, 50-99 are non-CNSL") +
+   ylab("Median-Normalized Signal")
+```
+```{r}
+ggplot(dfB_melt, aes(Var1, value)) +
+   geom_point(size=0.5) +
+   ylim(0,3) + 
+   ggtitle("Normalized Expression of Probe Vals Across All Ethnicity B Persons") +
+   xlab("Probe Number: 0-49 are CNSL, 50-99 are non-CNSL") +
+   ylab("Median-Normalized Signal")
+```
+```{r}
+ggplot(dfC_melt, aes(Var1, value)) +
+   geom_point(size=0.5) +
+   ylim(0,3) +
+   ggtitle("Normalized Expression of Probe Vals Across All Ethnicity C Persons") +
+   xlab("Probe Number: 0-49 are CNSL, 50-99 are non-CNSL") +
+   ylab("Median-Normalized Signal")
+
+```
+```{r}
+
+# remove 3 erratic probes, transpose matrix, convert to tibble (dataframe)
+# and clean up column names
+probesToRemove <- c("CNSL_probe_5", "CNSL_probe_23", "CNSL_probe_46")
+probesToRemoveIdx <- which(colnames(dfA_median) %in% probesToRemove)
+dfA_median <- t(dfA_median[,-probesToRemoveIdx])
+dfB_median <- t(dfB_median[,-probesToRemoveIdx])
+dfC_median <- t(dfC_median[,-probesToRemoveIdx])
+
+probeIdx <- c(0:4,6:22,24:45,47:99)    # probe values after removal of 3 bad ones
+tibA <- as_data_frame(dfA_median)
+tibB <- as_data_frame(dfB_median)    # column names don't have person ID
+tibC <- as_data_frame(dfC_median)
+
+# add back probe names and probe indices:
+tibA <- cbind(probeName=rownames(dfA_median), probeIdx, tibA)
+tibB <- cbind(probeName=rownames(dfB_median), probeIdx, tibB)
+tibC <- cbind(probeName=rownames(dfC_median), probeIdx, tibC)
+
+# add people identifiers as column names
+colnames(tibA)[3:dim(tibA)[2]] <- paste0("person", colnames(tibA)[3:dim(tibA)[2]])
+colnames(tibB)[3:dim(tibB)[2]] <- paste0("person", colnames(tibB)[3:dim(tibB)[2]])
+colnames(tibC)[3:dim(tibC)[2]] <- paste0("person", colnames(tibC)[3:dim(tibC)[2]])
+
+
+```
+
+```{r}
+# creating a function that will return a dataframe of people/probe intervals
+# for each person that has enough consecutive statistically significant probes.
+calcPeopleProbesDeviate <- function(TIB){     # TIB is a tibble (dataframe)
+   # for every person,
+   # calculate normal distribution parameters (mean and var) using probes 50-99 only
+   ctrlProbeIdx <-grep("^non_CNSL", TIB$probeName)
+   ctrlMeans <- apply(TIB[ctrlProbeIdx,3:dim(TIB)[2]], 2, mean)
+   ctrlVars <-  apply(TIB[ctrlProbeIdx,3:dim(TIB)[2]], 2, var)
+   
+   # grab data needed for all persons
+   expProbeIdx <- grep("^CNSL", TIB$probeName)
+   expProbeNames <- TIB$probeName[expProbeIdx]
+   
+   
+   # for each person, calculate p-value for each experimental (non-control) probe
+   # and save only those persons with at least 3 consecutive probes with pvals < 0.002
+   
+   # initialize the 2 data structures that will be returned:
+   mutations <- data.frame(person=character(), start=character(), stop=character(),
+                           stringsAsFactors = FALSE)
+   Pvalues <- c()
+   DelDp <- c()
+   
+   # proceed to loop through each person in the particular ethnicity
+   for(person in colnames(TIB)[3:dim(TIB)[2]]){
+      expQuantiles <- TIB[expProbeIdx, person]
+      personIdx <- which(names(ctrlMeans) == person)
+      pv_left <- pnorm(expQuantiles, mean=ctrlMeans[personIdx],   # deletion
+                         sd=sqrt(ctrlVars[personIdx]))
+      pv_right <- 1 - pv_left                                     # duplication
+      df_pv <- cbind(pv_left, pv_right)
+      pvals <- apply(df_pv, 1, min)
+      
+      #print(pvals)
+      
+
+      # look for interval where at least 4-consecutive probes have p-vals < 0.002
+      # larger p-vals (e.g. 0.05) gave too many false positives
+      # I'm assuming independence of probes--that they have no overlap or little overlap
+      pvalsBool <- pvals < 0.002
+
+      if(sum(pvalsBool) > 0){    # skipping all persons without any signif pvals
+         indices = 1:(length(pvals)-3)
+         runningSum = list()
+         for(idx in indices){
+            #print(c("idx", idx))
+            runningSum <- c(runningSum, sum(pvalsBool[idx:(idx+3)]))
+         }
+         runningSum <- unlist(runningSum)
+         if(4 %in% runningSum){         # requiring at least one signif 4-mer
+            # determine position of first and last "4":
+            startPosn <- which(runningSum==4)[1]
+            stopPosn <- (tail(which(runningSum==4),n=1)+3)
+            start <- expProbeNames[startPosn]
+            stop <- expProbeNames[stopPosn]
+            # determine if start and stop positions pvals are equal to
+            # pv_left (deletion) or pv_right (duplication)
+            if(pvals[startPosn]==pv_left[startPosn] & 
+               pvals[stopPosn]==pv_left[stopPosn]){
+               DelDp <- c(DelDp, "deletion")
+            }
+            else if(pvals[startPosn]==pv_right[startPosn] &
+                    pvals[stopPosn]==pv_right[stopPosn]){
+               DelDp <- c(DelDp, "duplication")
+            }
+            else{DelDp <- c(DelDp, "needsQA")}
+            
+            # add interval info for this 
+            mutations <- rbind(mutations, cbind(person,
+                                               start=as.character(expProbeNames[which(runningSum==4)[1]]),
+                                          stop=as.character(expProbeNames[(tail(which(runningSum==4),n=1)+3)])),  
+                               stringsAsFactors=FALSE)
+            Pvalues <- c(Pvalues, pvals) 
+         }
+      }   ### YES, THIS FUNCTION IS A LITTLE LONG.
+   }
+   # paste DelDp onto mutations dataframe
+   mutations <- cbind(mutations, DelDp)
+   return(list(mutations, Pvalues))
+}
+```
+### Processing the data for ethnicity A
+```{r}
+# run group A: (will want to wrap this part into a function)
+retA <- calcPeopleProbesDeviate(tibA)
+mutationsA <- retA[[1]]
+Pvalues <- retA[[2]]
+
+# determine if all intervals are canonical
+print(unique(mutationsA[,2:3]))    # only 2/125 aren't in canonical intervals
+```
+This shows that there is 1 non-canonical interval.
+```{r}
+print(mutationsA[mutationsA$start=="CNSL_probe_26",])
+```
+We see that both of these people have a duplication between probe 26 and 34.  Plotting (not shown here) revealed that the p-values at probe 26 were not that strong.  This implies that these 2 events are probably actually 27-34 duplications.
+```{r}
+
+# group people with mutations by specific Del/Dp interval and deletion/duplication
+ethA_32_38_del <- mutationsA %>% filter(start=="CNSL_probe_32") %>%
+   filter(stop=="CNSL_probe_38") %>% filter(DelDp=="deletion")
+ethA_32_38_dp <- mutationsA %>% filter(start=="CNSL_probe_32") %>%
+   filter(stop=="CNSL_probe_38") %>% filter(DelDp=="duplication")
+ethA_27_34_del <- mutationsA %>% filter(start=="CNSL_probe_27") %>% 
+   filter(stop=="CNSL_probe_34") %>% filter(DelDp=="deletion")
+ethA_27_34_dp <- mutationsA %>% filter(start=="CNSL_probe_27") %>% 
+   filter(stop=="CNSL_probe_34") %>% filter(DelDp=="duplication")
+
+
+print(paste("The fraction of ethnicity A persons with the probe 32 to probe 38 deletion is ", round(dim(ethA_32_38_del)[1]/dim(tibA)[2],4), "."))
+```
+```{r}
+print(paste("The fraction of ethnicity A persons with the probe 32 to probe 38 duplication is ", round(dim(ethA_32_38_dp)[1]/dim(tibA)[2],4), "."))
+```
+```{r}
+print(paste("The fraction of ethnicity A persons with the probe 27 to probe 34 deletion is ", round(dim(ethA_27_34_del)[1]/dim(tibA)[2],4), "."))
+```
+```{r}
+print(paste("The fraction of ethnicity A persons with the probe 27 to probe 34 duplication is ", round(dim(ethA_27_34_dp)[1]/dim(tibA)[2],4), "."))
+```
+### Processing data for ethnicity B
+```{r}
+retB <- calcPeopleProbesDeviate(tibB)
+mutationsB <- retB[[1]]
+Pvalues <- retB[[2]]
+print(unique(mutationsB[,2:3]))   # all amplifications are from probe 20 to probe 40
+```
+We see that only the canonical 20-40 interval exists in ethnicity B.
+```{r}
+ethB_20_40_del <- mutationsB %>% filter(start=="CNSL_probe_20") %>%
+   filter(stop=="CNSL_probe_40") %>% filter(DelDp=="deletion")
+
+ethB_20_40_dp <- mutationsB %>% filter(start=="CNSL_probe_20") %>%
+   filter(stop=="CNSL_probe_40") %>% filter(DelDp=="duplication")
+
+print(paste0("The fraction of ethnicity B persons containing the probe20 to probe 40 deletion is ", round(dim(ethB_20_40_del)[1]/dim(tibB)[2],4), "."))
+```
+```{r}
+print(paste0("The fraction of ethnicity B persons containing the probe20 to probe 40 duplication is ", round(dim(ethB_20_40_dp)[1]/dim(tibB)[2],4), "."))
+```
+### Processing the data for ethnicity C
+```{r}
+retC <- calcPeopleProbesDeviate(tibC)
+mutationsC <- retC[[1]]
+Pvalues <- retC[[2]]
+print(unique(mutationsC[,2:3]))   
+```
+We see that there is a non-canonical interval from 14-41 for ethnicity C.
+```{r}
+print(unlist(c("non-canonical breakpoint",mutationsC[mutationsC$DelDp=="needsQA",])))
+```
+This 14-41 interval only exists for a single person.  Plotting the data (not shown here) showed that it looks like a legitimate result with all points from probe 14 to probe 41 being statisitically significant.
+```{r}
+ethC_10_40_del <- mutationsC %>% filter(start=="CNSL_probe_10") %>%
+   filter(stop=="CNSL_probe_40") %>% filter(DelDp=="deletion")
+ethC_10_40_dp <- mutationsC %>% filter(start=="CNSL_probe_10") %>%
+   filter(stop=="CNSL_probe_40") %>% filter(DelDp=="duplication")
+print(paste0("The fraction of ethnicity C persons containing the probe10 to probe 40 deletion is ", round(dim(ethC_10_40_del)[1]/dim(tibC)[2],4), "."))
+```
+```{r}
+print(paste0("The fraction of ethnicity C persons containing the probe10 to probe 40 dupliction is ", round(dim(ethC_10_40_dp)[1]/dim(tibC)[2],4), "."))
+
+```
+
+
+
+
+
