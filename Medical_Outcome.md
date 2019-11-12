@@ -685,7 +685,7 @@ ggplot(DF, aes(x=trt, y=SRHimprove), colour=sex) +
   ylab("SRH improvement") + xlab("Treatment") +
   scale_color_manual(name="Sex",
                       breaks = c("MALE", "FEMALE"),
-                      values = c("green", "blue"),
+                      values = c("red", "blue"),
                       labels = c("Male", "Female"))
 ```
 
